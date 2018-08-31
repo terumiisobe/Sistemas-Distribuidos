@@ -7,7 +7,7 @@ public class MulticastPeer{
         try
         {
             InetAddress group = InetAddress.getByName(args[1]);
-            s = new MulticastSocket(6789);
+            s = new MulticastSocket(6789);  // port 6789
             s.joinGroup(group);
             byte[] m = args[0].getBytes();
             DatagramPacket messageOut = new DatagramPacket(m, m.length, group, 6789);
@@ -28,4 +28,5 @@ public class MulticastPeer{
             if(s != null)
                 s.close();
         }
-    }}
+    }
+}
