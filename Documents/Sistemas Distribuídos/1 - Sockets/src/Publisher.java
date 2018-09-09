@@ -28,8 +28,9 @@ public class Publisher {
             DatagramPacket join_packet = new DatagramPacket(join_message, join_message.length, group, 6789);
             sock.send(join_packet);
             /*send public key to group*/
-            join_packet = new DatagramPacket(pub, 512, group, 6789);
-            sock.send(pub);
+            byte[] pubb = pub.getBytes();
+            join_packet = new DatagramPacket(pubb, pubb.length, group, 6789);
+            sock.send(join_packet);
 
             boolean exit = false; // indicates if user is in group
 
@@ -79,6 +80,3 @@ class Receiver extends Thread{
         catch (IOException e){System.out.println("IO: " + e.getMessage());}
     }
 }
-
-
-
