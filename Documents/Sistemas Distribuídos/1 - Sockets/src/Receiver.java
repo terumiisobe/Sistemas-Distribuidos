@@ -3,7 +3,8 @@ import java.io.*;
 import java.security.*;
 import java.util.*;
 import java.security.spec.X509EncodedKeySpec;
-//import sun.misc.BASE64Encoder;
+import java.security.KeyFactorySpi;
+import java.lang.Object;
 
 /*------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------Receiver----------------------------------------------------*/
@@ -45,33 +46,40 @@ public class Receiver{
 
         String mensagem = new String(messageIn.getData());
 
-        if(mensagem.contains("entrou")) //ok
-          novosUsers(messageIn.getData());
-
-        if(mensagem.contains("saiu")) //ok
-          retirarUsers(messageIn.getData());
-
-        if(mensagem.contains("pede acesso"))
-          publish.enviarResposta(new String(messageIn.getData()));
-
-        if(mensagem.contains("respondeu"))
-        {
-          //caso vc tenha feito o pedido -> verificar respostas que estao codificadas
-          //caso vc n tenha feito o pedido -> faz nada
-        }
-        if(publish.esperando_resposta)
+        if(publish.iniciaTimer)
         {
           // timer de 1000ms = 1s
+          publish.iniciaTimer = false;
+          publish.esperando_resposta = true;
           timer = new Timer();
           timer.schedule(new TimerTask(){
             @Override
             public void run(){
               System.out.println("estouro do timer");
               timer.cancel(); //talvez de problema**
+              publish.esperando_resposta = false;
             }
-
           }, 1000);
         }
+
+        if(mensagem.contains("entrou")) //ok
+          novosUsers(messageIn.getData());
+
+        else if(mensagem.contains("saiu")) //ok
+          retirarUsers(messageIn.getData());
+
+        else if(mensagem.contains("pede acesso"))
+          publish.enviarResposta(new String(messageIn.getData()));
+
+        else if(mensagem.contains("respondeu"))
+        {
+          testarAutenticidade(messageIn.getData());
+          //caso vc tenha feito o pedido -> verificar respostas que estao codificadas
+          if((publish.estadoSC1.equals("WANTED") || publish.estadoSC2.equals("WANTED")) && publish.esperando_resposta){ //caracteriza fazer o pedido
+          }
+          //caso vc n tenha feito o pedido -> faz nada
+        }
+
     }
     socket.leaveGroup(grupo);
   }
@@ -125,7 +133,9 @@ public class Receiver{
       if(!(users.contains(novo_processo))){
         System.out.println("**" + rest);  //imprime mensagem recebida
 
-        PublicKey pub = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pubb)); //ok
+        KeyFactory fact = KeyFactory.getInstance("RSA");
+        PublicKey pub = fact.generatePublic(new X509EncodedKeySpec(pubb));
+
         users_chave.add(pub);     //adiciona chave publica na lista
         users.add(novo_processo); //adiciona novo usuário a lista
 
@@ -137,7 +147,7 @@ public class Receiver{
       }
 
       //inicia apenas quando existem 3 processos ou mais
-      if(users.size() > 2){
+      if(users.size() > 1){                                                 //mudar para 2
         if(!publish.requisito_n3)
           t.start();
         publish.requisito_n3 = true;
@@ -175,19 +185,64 @@ public class Receiver{
   public void atualizaWanted(){
 
   }
+
+  /* testar autenticidade do par */
+  public static void testarAutenticidade(byte[] m) throws Exception{
+    byte[] m_assinada = new byte[64];  //a mensagem assinada tem 64 bytes
+    byte[] restb = new byte[500];      //mesmo tamanho do buffer de dados
+    int n_espaco = 0;
+    char espaco = ' ';
+    int i;
+
+    for(i = 0; i < m.length; i++){
+      if(m[i] == (byte)espaco)
+        n_espaco++;
+      if(n_espaco==2) //espaco depois da palavra chave "respondeu"
+        break;
+    }
+    i++;             //posicao inicial da mensagem assinada                     //(ok)
+
+    System.arraycopy(m, 0, restb, 0, i);
+    System.arraycopy(m, i, m_assinada, 0, 64);
+
+    System.out.println("enviado " + new String(m));                               //teste
+    //for(i = 0; i < 80; i++){
+      //System.out.println((char)m[i]);
+    //}
+
+    String rest = new String(restb);
+    String[] s = rest.split(" ");
+    String processo_respondeu = s[0];
+
+    if(decode(processo_respondeu, m_assinada) == 2){// assinatura verificada com resposta OK
+      publish.n_respostas++;
+      System.out.println("**" + rest + " OK (verified)");
+    }
+    else if(decode(processo_respondeu, m_assinada) == 1){//assinatura verificada com resposta NO
+      System.out.println("**" + rest + " NO (verified)");
+    }
+    else{//assinatura não verificada
+      System.out.println("(message not verified)");
+    }
+
+  }
+
   /* decodificar uma resposta (autenticidade) usando chave pública */
-  public int decode(String remetente, byte[] m_assinada) throws Exception{ //nao ta pronto
+  public static int decode(String remetente, byte[] m_assinada) throws Exception{ //nao ta pronto
     String ok = new String("OK");
     String no = new String("NO");
     int index = users.indexOf(remetente);
 
-    Signature assinatura = Signature.getInstance("DSA");
+    Signature assinatura = Signature.getInstance("SHA256withRSA");
     assinatura.initVerify(users_chave.get(index));        //initialize this object for verifing using public key
-    assinatura.update(ok.getBytes());                 //updates the data to be verified by a byte
+    assinatura.update(ok.getBytes());                     //updates the data to be verified by a byte
     boolean verificadoOK = assinatura.verify(m_assinada); //verifies the passed-in signature.
     if(verificadoOK)
       return 2;
+
     else{
+      assinatura = Signature.getInstance("SHA256withRSA");
+      assinatura.initVerify(users_chave.get(index));
       assinatura.update(no.getBytes());
       boolean verificadoNO = assinatura.verify(m_assinada);
       if(verificadoNO)
@@ -215,6 +270,8 @@ class Publisher extends Thread{
   String estadoSC1;
   String estadoSC2;
 
+  public boolean iniciaTimer;
+  public int n_respostas;
   public boolean requisito_n3;
   public boolean esperando_resposta;
   public boolean sair;
@@ -230,6 +287,8 @@ class Publisher extends Thread{
     this.estadoSC1 = "RELEASED";
     this.estadoSC2 = "RELEASED";
 
+    this.iniciaTimer = false;
+    this.n_respostas = 0;
     this.requisito_n3 = false;
     this.esperando_resposta = false;
     this.sair = false;
@@ -247,21 +306,22 @@ class Publisher extends Thread{
       while(!sair){
 
           //caso estadoSC for HELD: (liberar SC, sair)
-          if(estadoSC1 == "HELD" || estadoSC2 == "HELD")
+          if(estadoSC1.equals("HELD") || estadoSC2.equals("HELD"))
           {
             System.out.println(menu2);
             String userInput = System.console().readLine();
-            if(userInput == "1"){
+            if(userInput.equals("1")){
 
             }
-            else if (userInput == "2"){
-              if(estadoSC1 == "HELD" || estadoSC2 =="HELD")
+            else if (userInput.equals("2")){
+              if(estadoSC1.equals("HELD") || estadoSC2.equals("HELD")){
                 transferirSC();
                 enviarSaida();
                 sair = true;
             }
-            else{
-              System.out.println(invalido);
+              else{
+                System.out.println(invalido);
+              }
             }
           }
 
@@ -270,15 +330,15 @@ class Publisher extends Thread{
           {
             System.out.println(menu1);
             String userInput = System.console().readLine();
-            if(userInput == "1"){
+            if(userInput.equals("1")){
               estadoSC1 = "WANTED";
               enviarPedido(1);
-              esperando_resposta = true;
+              iniciaTimer = true;
             }
-            else if (userInput == "2"){
+            else if (userInput.equals("2")){
               estadoSC2 = "WANTED";
               enviarPedido(2);
-              esperando_resposta = true;
+              iniciaTimer = true;
             }
             else if (userInput.equals("3")){
               enviarSaida();
@@ -294,6 +354,7 @@ class Publisher extends Thread{
   catch(Exception e){System.out.println("IO: " + e.getMessage());}
 
   }
+
   /* enviar id e chave pública na forma "X entrou {chave_publica}", chave publica tem o tamanha de 94 bytes */
   public void enviarInfo() throws Exception{
     String m = nome + " entrou ";
@@ -305,44 +366,55 @@ class Publisher extends Thread{
     System.arraycopy(b_pub, 0, mensagem, b_m.length, b_pub.length);
     enviarDatagrama(mensagem);
   }
+
   /* enviar pedido à seção crítica na forma <Tempo,Id> MUDAR*/
   public void enviarPedido(int sc) throws IOException{
     String m = nome + " pede acesso a SC" + sc;
     byte[] b_m = m.getBytes();
     enviarDatagrama(b_m);
   }
+
   /* enviar resposta a pedido de SC */
   public void enviarResposta(String mensagem) throws Exception{
     //precisa ser encoded, pode ser só uma parte da mensagem encoded
-    System.out.println(mensagem);
+    System.out.println("**" + mensagem);
     String[] s = mensagem.split(" ");
-    String nome_respondeu = s[0];
+    String nome_respondeu = s[0]; //usuario que está pedindo acesso
     String sc = s[4];
 
     // determina qual sera a resposta baseado nas variaveis estadoSC
-    String resposta = new String();
+    int resposta = 0;
     if(sc.equals("SC1")){
       if(estadoSC1.equals("RELEASED") || estadoSC1.equals("WANTED"))
-        resposta = "OK";
+        resposta = 1;
       else  //processo possui o acesso à SC1
-        resposta = "NO";
+        resposta = 0;
     }
     else if(sc.equals("SC2")){
       if(estadoSC1.equals("RELEASED") || estadoSC1.equals("WANTED"))
-        resposta = "OK";
+        resposta = 1;
       else  //processo possui o acesso à SC2
-        resposta = "NO";
+        resposta = 0;
     }
 
     // unir o nome à resposta codificada
-    byte[] nb = nome.getBytes();  //nome proprio em bytes
-    byte[] rb = encode(resposta); //resposta em bytes m_assinada
+    String m = nome + " respondeu ";
+    byte[] nb = m.getBytes();
+    byte[] rb = encode(resposta); //resposta em bytes m_assinada sempre com 64 bytes
     byte[] resultado = new byte[nb.length + rb.length];
+
 
     System.arraycopy(nb, 0, resultado, 0, nb.length);
     System.arraycopy(rb, 0, resultado, nb.length, rb.length);
 
-    enviarDatagrama(resultado);
+    System.out.println("enviado " + new String(resultado));
+    //for(int i = 0; i < resultado.length; i++){
+    //  System.out.println((char)resultado[i]);
+    //}
+
+    enviarDatagrama(resultado);                                               //teste
+    //String testeS = m + resposta;                                               //teste
+    //enviarDatagrama(testeS.getBytes());                                         //teste
 
     //coloca na lista WANTED
   }
@@ -367,12 +439,19 @@ class Publisher extends Thread{
   }
 
   /* encodificar resposta usando chave privada */
-  public byte[] encode(String mensagem) throws Exception{
-    Signature assinatura = Signature.getInstance("RSA");
+  public byte[] encode(int resposta) throws Exception{
+    Signature assinatura = Signature.getInstance("SHA256withRSA");
     assinatura.initSign(chave_privada);
+
+    System.out.println(resposta);
+    String mensagem;
+    if(resposta == 1){mensagem = "OK";}
+    else{mensagem = "NO";}
+
     assinatura.update(mensagem.getBytes());
     byte[] m_assinada = assinatura.sign();
-    System.out.println(new String(m_assinada));
+    System.out.println(m_assinada.length);                                      //teste
+    //System.out.println(new String(m_assinada)); teste
     return(m_assinada);
   }
 
