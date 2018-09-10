@@ -2,6 +2,7 @@ import java.net.*;
 import java.io.*;
 import java.security.*;
 import java.util.*;
+import java.security.spec.X509EncodedKeySpec;
 
 /* receber e tratar mensagens*/
 public class Receiver{
@@ -24,25 +25,28 @@ public class Receiver{
   static Timer timer;
 
   /* monitorando mensagens recebidas do grupo */
+  //as mensagens recebidas pelo grupo sao identificadas com **
   public static void main(String args[]) throws Exception {
 
     iniciar(args[0]);
-    publish.enviarInfo();
+    publish.enviarInfo();  // anuncia entrada no grupo, enviando sua chave publica
 
     byte[] buffer;
     DatagramPacket messageIn;
     while(!publish.sair)
     {
-        buffer = new byte[5000];
+        buffer = new byte[500];
         messageIn = new DatagramPacket(buffer, buffer.length);
         socket.receive(messageIn);
 
         String mensagem = new String(messageIn.getData());
-        System.out.println("Received: ");
-        System.out.println(mensagem);
+        //System.out.println("Received: ");
+        //System.out.println(mensagem);
 
-        if(mensagem.contains("entrou") || mensagem.contains("saiu"))
-          atualizaUsers(messageIn.getData());
+        if(mensagem.contains("entrou"))
+          novosUsers(messageIn.getData());
+
+        if(mensagem.contains("saiu"))
 
         if(mensagem.contains("pede acesso"))
           publish.enviarResposta();
@@ -53,17 +57,16 @@ public class Receiver{
         }
         if(publish.esperando_resposta)
         {
+          // timer de 1000ms = 1s
           timer = new Timer();
           timer.schedule(new TimerTask(){
             @Override
             public void run(){
-
+              System.out.println("estouro do timer");
+              timer.cancel(); //talvez de problema
             }
 
           }, 1000);
-          //   public void run(){
-          //   }
-          // }, 1000);
         }
     }
     socket.leaveGroup(grupo);
@@ -79,17 +82,68 @@ public class Receiver{
     chave_publica = pair.getPublic();
     meu_nome = nome;
 
+    users = new ArrayList<String>();
+    users_chave = new ArrayList<PublicKey>();
+
     socket = new MulticastSocket(6789);
     grupo = InetAddress.getByName("224.0.0.1");
     socket.joinGroup(grupo);
 
     publish = new Publisher(meu_nome, chave_publica, socket, grupo);
     t = new Thread(publish);
-    t.start();
 
   }
-  /* atualiza ambas as listas de usuários online e chaves publicas, quando n>=3 atualiza variavel requisitos_n3*/
-  public static void atualizaUsers(byte[] m){
+  /* atualiza ambas as listas de usuários online e chaves publicas, quando n>=3 atualiza variavel requisito_n3*/
+  public static void novosUsers(byte[] m) throws Exception{
+      byte[] pubb = new byte[94];  //a chave publica tem 94 bytes
+      byte[] restb = new byte[500]; //mesmo tamanho do buffer de dados
+      int n_espaco = 0;
+      char espaco = ' ';
+      int i;
+
+      for(i = 0; i < m.length; i++){
+        if(m[i] == (byte)espaco)
+          n_espaco++;
+        if(n_espaco==2) //espaco depois da palavra chave "entrou"
+          break;
+      }
+      i++;             //posicao inicial da chave publica
+
+      System.arraycopy(m, i, pubb, 0, 94);
+      System.arraycopy(m, 0, restb, 0, i);
+
+      String rest = new String(restb);
+
+      String[] s = rest.split(" ");
+      String novo_processo = s[0];
+
+      //se a lista não contem o novo processo
+      if(!(users.contains(novo_processo))){
+        System.out.println("**" + rest);
+
+        PublicKey pub = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pubb)); //ok
+        users_chave.add(pub);     //adiciona chave publica na lista
+        users.add(novo_processo); //adiciona novo usuário a lista
+
+        if(!novo_processo.equals(meu_nome))
+          publish.enviarInfo();
+
+        //imprime lista atulizada
+        System.out.println("Lista de processos atualizada: ");
+        for(i = 0; i < users.size(); i++){
+          System.out.println(" -" + users.get(i));
+        }
+
+      }
+
+      //inicia apenas quando existem 3 processos ou mais
+      if(users.size() > 2){
+        if(!publish.requisito_n3)
+          t.start();
+        publish.requisito_n3 = true;
+      }
+      else
+        System.out.println("Esperando novos processos...");
 
   }
   /* atualiza filas de WANTED (apenas quando tem o HELD). Atualiza quando alguem sai*/
@@ -136,17 +190,14 @@ class Publisher extends Thread{
   }
   /* gerencia ação do usuário */
   public void run(){
-    //caso estadoSC1 for RELEASED: (acessar SC1, acessar SC2, sair)
-    //caso estadoSC2 for HELD: (liberar SC, sair)
     //nao pode querer (WANTED) acessar as duas SC ao mesmo tempo
     //nao pode digitar qualquer coisa
     String menu1 = "Digite o número correspondente à sua escolha:\n1-Acessar SC1\n2-Acessar SC2\n3-Sair";
     String menu2 = "Digite o número correspondente à sua escolha:\n1-Liberar SC\n2-Sair";
     String invalido = "Este valor digitado é inválido!";
+
     try{
-    if(requisito_n3)
-    {
-      while(true){
+          //caso estadoSC for HELD: (liberar SC, sair)
           if(estadoSC1 == "HELD" || estadoSC2 == "HELD")
           {
             System.out.println(menu2);
@@ -157,14 +208,15 @@ class Publisher extends Thread{
             else if (userInput == "2"){
               if(estadoSC1 == "HELD" || estadoSC2 =="HELD")
                 transferirSC();
-              enviarSaida();
-              sair = true;
+                enviarSaida();
+                sair = true;
             }
             else{
               System.out.println(invalido);
-              continue;
             }
           }
+
+          //caso estadoSC for RELEASED: (acessar SC1, acessar SC2, sair)
           else
           {
             System.out.println(menu1);
@@ -183,17 +235,15 @@ class Publisher extends Thread{
             }
             else{
               System.out.println(invalido);
-              continue;
             }
           }
 
-      }
     }
-  }
   catch(IOException e){System.out.println("IO: " + e.getMessage());}
   catch(Exception e){System.out.println("IO: " + e.getMessage());}
+
   }
-  /* enviar id e chave pública */
+  /* enviar id e chave pública na forma "X entrou {chave_publica}", chave publica tem o tamanha de 94 bytes */
   public void enviarInfo() throws Exception{
     String m = nome + " entrou ";
     byte[] b_m = m.getBytes();
@@ -204,9 +254,9 @@ class Publisher extends Thread{
     System.arraycopy(b_pub, 0, mensagem, b_m.length, b_pub.length);
     enviarDatagrama(mensagem);
   }
-  /* enviar pedido à seção crítica */
+  /* enviar pedido à seção crítica na forma "X pede acesso a SC Y" */
   public void enviarPedido(int sc) throws IOException{
-    String m = nome + "pede acesso à SC" + sc;
+    String m = nome + "pede acesso a SC" + sc;
     byte[] b_m = m.getBytes();
     enviarDatagrama(b_m);
   }
@@ -215,10 +265,11 @@ class Publisher extends Thread{
   //precisa ser encoded
 
   }
-  /* enviar token à próximo da lista, enviar lista de WANTED daquela SC*/
+  /* enviar lista de WANTED daquela SC */
   public void transferirSC(){
 
   }
+  /* envia anuncio de saida na forma "X saiu" */
   public void enviarSaida() throws Exception{
     String m = nome + "saiu";
     byte[] b_m = m.getBytes();
