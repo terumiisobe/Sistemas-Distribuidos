@@ -5,7 +5,14 @@ import java.util.*;
 import java.security.spec.X509EncodedKeySpec;
 import java.security.KeyFactorySpi;
 import java.lang.Object;
-
+/* o que precisa ser feito:
+    - Listas WANTED e compartilhamento delas
+    - Liberação das SC
+    - Correção (reset) das variaveis flags
+    - Corrigir falha do par, nao está realizando
+    - Conferir requisitos do PDF
+    - Testes diversos
+    */
 /*------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------Receiver----------------------------------------------------*/
 /*------------------------------------------------------------------------------------------------------------*/
@@ -21,8 +28,11 @@ public class Receiver{
   static PrivateKey chave_privada;
   static PublicKey chave_publica;
 
-  static List<String> users;        // nome dos usuários online
+  static boolean falhou;
+
+  static List<String> users;          // nome dos usuários online
   static List<PublicKey> users_chave; // chave pública dos usuários online
+  static List<String> respostas;      //pares que responderam OK ou NO -> variavel n_respostas pode sair
 
   static Queue<String> SC1_wanted; // usuários na fila de SC1
   static Queue<String> SC2_wanted; // usuários na fila de SC2
@@ -46,21 +56,49 @@ public class Receiver{
 
         String mensagem = new String(messageIn.getData());
 
-        if(publish.iniciaTimer)
+        if(publish.inicia_timer)
         {
           // timer de 1000ms = 1s
-          publish.iniciaTimer = false;
+          publish.inicia_timer = false;
           publish.esperando_resposta = true;
           timer = new Timer();
           timer.schedule(new TimerTask(){
             @Override
-            public void run(){
-              System.out.println("estouro do timer");
+            public void run() {
               timer.cancel(); //talvez de problema**
               publish.esperando_resposta = false;
+              if(publish.acesso_negado){
+                System.out.println("Seu acesso foi negado!");
+                publish.acesso_negado = false;
+              }
+              else if(publish.n_respostas == users.size()){ // condição de acesso
+                if(publish.estadoSC1.equals("WANTED")){
+                  publish.estadoSC1 = "HELD";
+                }
+                else if(publish.estadoSC2.equals("WANTED")){
+                  publish.estadoSC2 = "HELD";
+                }
+                System.out.println("Sucesso!");
+              }
+              else{ // acesso nao foi negado, mas alguem não respondeu, significa falha do par
+                for(int i = 0; i < users.size(); i++) {
+                  if(!respostas.contains(users.get(i))){
+                    System.out.println("alguem falhou");
+                    falhou = true;
+                  }
+                }
+              }
             }
-          }, 1000);
+          }, 500);
         }
+
+        if(falhou){ //houve alguma falha
+          for(int i = 0; i < users.size(); i++) {
+            if(!respostas.contains(users.get(i))){
+              falhaPar(users.get(i));
+            }
+          }
+      }
 
         if(mensagem.contains("entrou")) //ok
           novosUsers(messageIn.getData());
@@ -73,11 +111,7 @@ public class Receiver{
 
         else if(mensagem.contains("respondeu"))
         {
-          testarAutenticidade(messageIn.getData());
-          //caso vc tenha feito o pedido -> verificar respostas que estao codificadas
-          if((publish.estadoSC1.equals("WANTED") || publish.estadoSC2.equals("WANTED")) && publish.esperando_resposta){ //caracteriza fazer o pedido
-          }
-          //caso vc n tenha feito o pedido -> faz nada
+          analisaResposta(messageIn.getData());
         }
 
     }
@@ -94,8 +128,11 @@ public class Receiver{
     chave_publica = pair.getPublic();
     meu_nome = nome;
 
+    falhou = false;
+
     users = new ArrayList<String>();
     users_chave = new ArrayList<PublicKey>();
+    respostas = new ArrayList<String>();
 
     socket = new MulticastSocket(6789);
     grupo = InetAddress.getByName("224.0.0.1");
@@ -173,6 +210,20 @@ public class Receiver{
     imprimeLista();
     //chamar atualizaWanted
   }
+  /* processo de retirada do par que falhou */
+  public static void falhaPar(String nome) throws Exception{
+    if(nome.equals(meu_nome)){ //o próprio par falhou
+      publish.enviarSaida();
+    }
+    else{ //outro par falhou
+      int index  = users.indexOf(nome);
+      users.remove(index);
+      users_chave.remove(index);
+
+      imprimeLista();
+      //chamar atualizaWanted
+    }
+  }
 
   public static void imprimeLista(){
     System.out.println("Lista de processos atualizada: ");
@@ -187,7 +238,7 @@ public class Receiver{
   }
 
   /* testar autenticidade do par */
-  public static void testarAutenticidade(byte[] m) throws Exception{
+  public static int testarAutenticidade(byte[] m) throws Exception{
     byte[] m_assinada = new byte[64];  //a mensagem assinada tem 64 bytes
     byte[] restb = new byte[500];      //mesmo tamanho do buffer de dados
     int n_espaco = 0;
@@ -205,28 +256,42 @@ public class Receiver{
     System.arraycopy(m, 0, restb, 0, i);
     System.arraycopy(m, i, m_assinada, 0, 64);
 
-    System.out.println("enviado " + new String(m));                               //teste
-    //for(i = 0; i < 80; i++){
-      //System.out.println((char)m[i]);
-    //}
-
     String rest = new String(restb);
     String[] s = rest.split(" ");
     String processo_respondeu = s[0];
 
-    if(decode(processo_respondeu, m_assinada) == 2){// assinatura verificada com resposta OK
-      publish.n_respostas++;
+    if(decode(processo_respondeu, m_assinada) == 2){
       System.out.println("**" + rest + " OK (verified)");
+      respostas.add(processo_respondeu);
+      return 2;
     }
-    else if(decode(processo_respondeu, m_assinada) == 1){//assinatura verificada com resposta NO
+    else if(decode(processo_respondeu, m_assinada) == 1){
       System.out.println("**" + rest + " NO (verified)");
+      respostas.add(processo_respondeu);
+      return 1;
     }
-    else{//assinatura não verificada
+    else{
       System.out.println("(message not verified)");
+      return 0;
     }
 
   }
-
+  /* analisa respostas recebidas, apenas quando pede acesso */
+  public static void analisaResposta(byte[] m) throws Exception{
+    //caso vc tenha feito o pedido
+    if((publish.estadoSC1.equals("WANTED") || publish.estadoSC2.equals("WANTED")) && publish.esperando_resposta){ //caracteriza pedido
+      if(testarAutenticidade(m) == 2){      // assinatura verificada com resposta OK
+        publish.n_respostas++;
+      }
+      else if(testarAutenticidade(m) == 1){ //assinatura verificada com resposta NO
+        publish.acesso_negado = true;   //uma resposta negativa é suficiente para negar o acesso
+      }
+    }
+    //caso vc não tenha feito o pedido
+    else{
+      testarAutenticidade(m);
+    }
+  }
   /* decodificar uma resposta (autenticidade) usando chave pública */
   public static int decode(String remetente, byte[] m_assinada) throws Exception{ //nao ta pronto
     String ok = new String("OK");
@@ -270,8 +335,9 @@ class Publisher extends Thread{
   String estadoSC1;
   String estadoSC2;
 
-  public boolean iniciaTimer;
   public int n_respostas;
+  public boolean inicia_timer;
+  public boolean acesso_negado;
   public boolean requisito_n3;
   public boolean esperando_resposta;
   public boolean sair;
@@ -287,7 +353,8 @@ class Publisher extends Thread{
     this.estadoSC1 = "RELEASED";
     this.estadoSC2 = "RELEASED";
 
-    this.iniciaTimer = false;
+    this.acesso_negado = false;
+    this.inicia_timer = false;
     this.n_respostas = 0;
     this.requisito_n3 = false;
     this.esperando_resposta = false;
@@ -305,6 +372,7 @@ class Publisher extends Thread{
     try{
       while(!sair){
 
+          System.out.println("SC1: " + estadoSC1 + " SC2: " + estadoSC2);
           //caso estadoSC for HELD: (liberar SC, sair)
           if(estadoSC1.equals("HELD") || estadoSC2.equals("HELD"))
           {
@@ -333,12 +401,12 @@ class Publisher extends Thread{
             if(userInput.equals("1")){
               estadoSC1 = "WANTED";
               enviarPedido(1);
-              iniciaTimer = true;
+              inicia_timer = true;
             }
             else if (userInput.equals("2")){
               estadoSC2 = "WANTED";
               enviarPedido(2);
-              iniciaTimer = true;
+              inicia_timer = true;
             }
             else if (userInput.equals("3")){
               enviarSaida();
@@ -348,6 +416,9 @@ class Publisher extends Thread{
               System.out.println(invalido);
             }
           }
+          //delay necessário para impedir o aparecimento do menu antes da atualização das variavel de estadoSC
+          sleep(1000);
+
       }
     }
   catch(IOException e){System.out.println("IO: " + e.getMessage());}
@@ -380,17 +451,16 @@ class Publisher extends Thread{
     System.out.println("**" + mensagem);
     String[] s = mensagem.split(" ");
     String nome_respondeu = s[0]; //usuario que está pedindo acesso
-    String sc = s[4];
 
     // determina qual sera a resposta baseado nas variaveis estadoSC
-    int resposta = 0;
-    if(sc.equals("SC1")){
+    int resposta = 2;
+    if(mensagem.contains("SC1")){
       if(estadoSC1.equals("RELEASED") || estadoSC1.equals("WANTED"))
         resposta = 1;
       else  //processo possui o acesso à SC1
         resposta = 0;
     }
-    else if(sc.equals("SC2")){
+    else if(mensagem.contains("SC2")){
       if(estadoSC1.equals("RELEASED") || estadoSC1.equals("WANTED"))
         resposta = 1;
       else  //processo possui o acesso à SC2
@@ -403,18 +473,10 @@ class Publisher extends Thread{
     byte[] rb = encode(resposta); //resposta em bytes m_assinada sempre com 64 bytes
     byte[] resultado = new byte[nb.length + rb.length];
 
-
     System.arraycopy(nb, 0, resultado, 0, nb.length);
     System.arraycopy(rb, 0, resultado, nb.length, rb.length);
 
-    System.out.println("enviado " + new String(resultado));
-    //for(int i = 0; i < resultado.length; i++){
-    //  System.out.println((char)resultado[i]);
-    //}
-
     enviarDatagrama(resultado);                                               //teste
-    //String testeS = m + resposta;                                               //teste
-    //enviarDatagrama(testeS.getBytes());                                         //teste
 
     //coloca na lista WANTED
   }
@@ -443,14 +505,12 @@ class Publisher extends Thread{
     Signature assinatura = Signature.getInstance("SHA256withRSA");
     assinatura.initSign(chave_privada);
 
-    System.out.println(resposta);
     String mensagem;
     if(resposta == 1){mensagem = "OK";}
     else{mensagem = "NO";}
 
     assinatura.update(mensagem.getBytes());
     byte[] m_assinada = assinatura.sign();
-    System.out.println(m_assinada.length);                                      //teste
     //System.out.println(new String(m_assinada)); teste
     return(m_assinada);
   }
