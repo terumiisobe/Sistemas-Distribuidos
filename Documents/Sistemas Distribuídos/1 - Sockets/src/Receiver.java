@@ -11,7 +11,8 @@ import java.time.Instant;
 /* Testes falhos:
    - O processo primeiro da fila falhou, quando o processo que tem acesso a SC libera, ele nao responde nem o outro obtem acesso
       -Solução: o usuário deve causar um evento que resulte em respostas dos pares, para poder atualizar a lista do grupo
-
+   - Quando um processo falha enquanto está esperando, quem está atrá dele na fila não conseguirá acesso a SC
+      -Solução: os processos seguintes devem causarum evento que resulte em resposta
 */
 /*------------------------------------------------------------------------------------------------------------*/
 /*------------------------------------------------Receiver----------------------------------------------------*/
@@ -260,7 +261,7 @@ public class Receiver{
           publish.estadoSC2 = "HELD";
 
         //copiando lista de espera enviada
-        System.out.println("tam fila: " + tamanho_fila);
+        // System.out.println("tam fila: " + tamanho_fila);
         if(tamanho_fila > 1){
           for(i = 0; i < tamanho_fila - 1; i++){
               publish.SC_espera.add(s[5+i]);  //começa em 5 pois é o resto da fila
