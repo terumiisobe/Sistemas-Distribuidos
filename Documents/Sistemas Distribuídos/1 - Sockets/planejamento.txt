@@ -3,14 +3,9 @@ duvidas:
   como que o processo saberá que é o próximo a ter o HELD?
   se vc esta WANTED pra SC então deve ter o acesso a fila.
 soluções:
- -oq mensagem representa?
-    palavras chave;
+
 ideias:
- -mandar nome no início de cada mensagem
-    Importante caso:
-        - entrada e saida de processos
-        - pedidos de acesso (colocar na lista WANTED)
-        -
+
 Publisher:
 
 run():
