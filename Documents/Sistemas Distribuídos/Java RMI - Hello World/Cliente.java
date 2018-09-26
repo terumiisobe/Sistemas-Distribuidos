@@ -12,10 +12,6 @@ public class Cliente{
     int port = 1099;
     Registry referenciaServicoNomes = LocateRegistry.getRegistry();
     CliImpl clienteImpl = new CliImpl(referenciaServicoNomes);
-    while(true){
-      String input = System.console().readLine("Digite a mensagem: ");
-      clienteImpl.servidorRef.chamar(input, clienteImpl);
-    }
   }
 }
 
@@ -35,7 +31,7 @@ class CliImpl extends UnicastRemoteObject implements InterfaceCli{
   public CliImpl(Registry referencia) throws Exception{
     this.referenciaRN = referencia;
     this.servidorRef = (InterfaceServ)referencia.lookup("Servidor");
-    //System.out.println("chamou");
+    servidorRef.chamar("echo!", this);
   }
   public void echo(String qualquer) throws RemoteException{
     System.out.println("metodo echo do servidor");
