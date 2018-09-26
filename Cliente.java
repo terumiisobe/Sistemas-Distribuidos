@@ -31,7 +31,7 @@ class CliImpl extends UnicastRemoteObject implements InterfaceCli{
   public CliImpl(Registry referencia) throws Exception{
     this.referenciaRN = referencia;
     this.servidorRef = (InterfaceServ)referencia.lookup("Servidor");
-    servidorRef.chamar("echo!",this);
+    servidorRef.chamar("echo!", this);
   }
   public void echo(String qualquer) throws RemoteException{
     System.out.println("metodo echo do servidor");
