@@ -1,0 +1,53 @@
+duvidas:
+ -lista de processos WANTED deve ser compartilhada entre todos os processos?
+  como que o processo saberá que é o próximo a ter o HELD?
+  se vc esta WANTED pra SC então deve ter o acesso a fila.
+soluções:
+
+ideias:
+
+Publisher:
+
+run():
+Esperando ação do usuário no menu.
+Caso estadoSC1 for RELEASED: (acessar SC1, acessar SC2, sair)
+Caso estadoSC2 for HELD: (liberar SC, sair)
+
+enviarInfo():
+Envia id e chave pública.
+ >trigger: entrada própria, entrada de outro processo(Receiver)
+ >need: id, chave pública
+
+enviarPedido():
+Envia pedido à seção crítica para todos <T,P>. Muda estadoSC para WANTED.
+ >trigger: input usuário(Publisher)
+ >need: qual SC(input usuário)
+
+enviarResposta():
+Envia estados da seção crítica pedida.
+ >trigger: pedido de acesso(Receiver)
+ >need: estado da SC.
+
+transferirSC():
+Considerando que o presento processo posssui HELD da SC.
+Enviar a todos a liberação da SC e a lista dos processos WANTED.
+ >trigger: input do usuário,"liberar"(Publisher)
+ >need: lista de processos WANTED
+
+
+Receiver:
+
+main():
+Monitorar mensagens do grupo.
+Podem ser vários tipos de mensagem:
+ >Alerta entrada e saída (palavras-chave: "entrou" e "saiu")
+    -Atualizar a lista de ONLINE.
+ >Pedido acesso à SC (palavras-chave: "pede acesso à")
+    -Responder o pedido(Publisher: enviarResposta()).
+    -Se tiver HELD da SC deve incluir aquele processo na lista de WANTED.
+ >Resposta ao pedido encoded dentro de dt(palavras-chave: "respondeu")
+    -Caso todos OK: seu estadoSC vira HELD
+    -Caso pelo menos um NO: não faz nada.
+ >Receber lista de WANTED:
+    -Caso você sejá o próximo: estadoSC vira HELD e armazena lista.
+    -Caso você não seja o próximo ou RELEASED: ignora
