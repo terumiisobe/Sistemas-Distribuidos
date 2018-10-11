@@ -17,6 +17,13 @@ interface ClientInterface extends Remote{
 
 }
 
+interface ServerInterface extends Remote{
+  void searchFlights() throws Exception;
+  void searchHotels() throws Exception;
+  void subscribe();
+  void unsubscribe();
+}
+
 class ClientImplement extends UnicastRemoteObject implements ClientInterface{
 
   /*constructor*/
