@@ -9,8 +9,8 @@ import java.rmi.server.UnicastRemoteObject;
 
 public class Server{
 
-  static List<Flight> all_flights;
-  static List<Accomodation> all_hotels;
+  static ServerImplement server;
+  static Registry NameServiceRef;
 
   public static void main(String args[]) throws Exception{
     initialize();
@@ -63,15 +63,13 @@ public class Server{
 
   }
 }
+
   /* Initializes basic variables */
   static void initialize() throws Exception{
     int port = 1099;
-    Registry NameServiceRef = LocateRegistry.createRegistry(port);
-    ServerImplement server = new ServerImplement();
+    NameServiceRef = LocateRegistry.createRegistry(port);
+    server = new ServerImplement();
     Naming.rebind("Server", server);
-
-    all_flights = new ArrayList<Flight>();
-    all_hotels = new ArrayList<Accomodation>();
 
     System.out.println("Server set up."); //test
   }
@@ -109,16 +107,16 @@ public class Server{
   static void checkList(int list){
     System.out.println("\t--*--");
     if(list == 0){
-      for(int i = 0; i < all_flights.size(); i++){
+      for(int i = 0; i < server.all_flights.size(); i++){
         System.out.println("\tID:" + i);
-        all_flights.get(i).printInfo();
+        server.all_flights.get(i).printInfo();
         System.out.println("\t--*--\n");
       }
     }
     else if(list == 1){
-      for(int i = 0; i < all_hotels.size(); i++){
+      for(int i = 0; i < server.all_hotels.size(); i++){
         System.out.println("\tID: " + i);
-        all_hotels.get(i).printInfo();
+        server.all_hotels.get(i).printInfo();
         System.out.println("\t--*--\n");
       }
     }
@@ -144,8 +142,7 @@ public class Server{
     String price = System.console().readLine();
 
     Flight new_flight = new Flight(origin, destination, departure, quantity, price);
-    all_flights.add(new_flight);
-    System.out.println("Flight added sucessfuly!\n");
+    server.addToList(0, new_flight, null);
   }
 
   /* Register new accomodation */
@@ -162,69 +159,151 @@ public class Server{
     String price = System.console().readLine();
 
     Accomodation new_accomodation = new Accomodation(place, rooms, price);
-    all_hotels.add(new_accomodation);
-    System.out.println("Accomodation added sucessfuly!\n");
+    server.addToList(1, null, new_accomodation);
   }
 
   /* Remove flight */
   static void removeFlight(String ID){
     int id = Integer.parseInt(ID);
-    all_flights.remove(id);
-    System.out.println("Flight sucessfuly removed!\n");
+    if(id >= server.all_flights.size()){
+      System.out.println("This flight does not exist!");
+      return;
+    }
+    server.removeFromList(0, id);
   }
 
   /* Remove accomodation */
   static void removeAccomodation(String ID){
     int id = Integer.parseInt(ID);
-    all_hotels.remove(id);
-    System.out.println("Accomodation sucessfuly removed!\n");
-  }
-
-  /* Search function called by user*/
-  static void searchFlights() throws Exception{
-    for(int i = 0;i < all_flights.size(); i++){
-      System.out.println("\t--*--");
-      System.out.println("Origin:" + all_flights.get(i).origin);
-      System.out.println("Destination:" + all_flights.get(i).destination);
-      System.out.println("Departure date:" + all_flights.get(i).departure);
-      System.out.println("Price:" + all_flights.get(i).price);
+    if(id >= server.all_hotels.size()){
+      System.out.println("This accomodation does not exist!");
+      return;
     }
-    System.out.println("\t--*--");
+    server.removeFromList(1, id);
   }
-
-  /* Search function called by user*/
-  static void searchHotels() throws Exception{
-    for(int i = 0;i < all_hotels.size(); i++){
-      System.out.println("\t--*--");
-      System.out.println("Location:" + all_hotels.get(i).place);
-      System.out.println("Price:" + all_hotels.get(i).price);
-    }
-    System.out.println("\t--*--");
-  }
-
-  /* Subscribe to mailing list (called by user)*/
-  static void subscribe(){
-
-  }
-
-  /* Unsubscribe to mailing list (called by user)*/
-  static void unsubscribe(){
-
-  }
-
 }
 
 interface ServerInterface extends Remote{
-  void searchFlights() throws Exception;
-  void searchHotels() throws Exception;
-  void subscribe();
-  void unsubscribe();
+  void searchFlights(ClientInterface client) throws Exception;
+  void searchHotels(ClientInterface client) throws Exception;
+  //void subscribe();
+  //void unsubscribe();
+  void buyTicket(ClientInterface client, int ticket, int qty) throws Exception;
+  void bookRoom(ClientInterface client, int room, int qty) throws Exception;
+  void buyPackage() throws RemoteException;
+}
+
+interface ClientInterface extends Remote{
+  void Notify() throws Exception;
+  void echo(String message) throws Exception;
 }
 
 class ServerImplement extends UnicastRemoteObject implements ServerInterface{
+
+  static List<Flight> all_flights;
+  static List<Accomodation> all_hotels;
+
   /*constructor*/
   public ServerImplement() throws RemoteException{
+    all_flights = new ArrayList<Flight>();
+    all_hotels = new ArrayList<Accomodation>();
+  }
 
+  /* Search function called by user */
+  public void searchFlights(ClientInterface client) throws Exception{
+    for(int i = 0;i < all_flights.size(); i++){
+      client.echo("\t--*--");
+      client.echo("\tID: " + i);
+      client.echo("\tOrigin: " + all_flights.get(i).origin);
+      client.echo("\tDestination: " + all_flights.get(i).destination);
+      client.echo("\tDeparture date: " + all_flights.get(i).departure);
+      client.echo("\tPrice: " + all_flights.get(i).price);
+    }
+    client.echo("\t--*--\n");
+  }
+
+  /* Search function called by user */
+  public void searchHotels(ClientInterface client) throws Exception{
+    for(int i = 0;i < all_hotels.size(); i++){
+      client.echo("\t--*--");
+      client.echo("\tID: " + i);
+      client.echo("\tLocation: " + all_hotels.get(i).place);
+      client.echo("\tPrice: " + all_hotels.get(i).price);
+    }
+    client.echo("\t--*--\n");
+  }
+
+  /* Buy flight ticket */
+  public void buyTicket(ClientInterface client, int ticket, int qty) throws Exception{
+    int av = all_flights.get(ticket).quantity;
+    all_flights.get(ticket).quantity = av - qty;
+    if(qty == 0)
+      client.echo("No ticket was bought.");
+    else if(qty > av)
+      client.echo("That quantity is not available!");
+    else{
+      if(all_flights.get(ticket).quantity == 0)
+        removeFromList(0, ticket);
+      System.out.println("Flight ticket bought.");
+      client.echo("Flight ticket bought sucessfully!");
+    }
+  }
+
+  /* Book hotel room */
+  public void bookRoom(ClientInterface client, int room, int qty) throws Exception{
+    int av = all_hotels.get(room).rooms;
+    all_hotels.get(room).rooms = av - qty;
+    if(qty == 0)
+      client.echo("No room was booked.");
+    else if(qty > av)
+      client.echo("That quantity is not available!");
+    else{
+      if(all_hotels.get(room).rooms == 0)
+        removeFromList(1, room);
+      System.out.println("Room booked.");
+      client.echo("Hotel room booked sucessfully!");
+    }
+  }
+
+  public void buyPackage() throws RemoteException{
+    
+  }
+
+  /* Subscribe to mailing list (called by user)*/
+  public void subscribe(){
+    System.out.println("You have been subscribed!");
+  }
+
+  /* Unsubscribe to mailing list (called by user)*/
+  public void unsubscribe(){
+    System.out.println("You have been unsubscribed!");
+  }
+
+  /* List manipulation function add*/
+  public void addToList(int list, Flight new_flight, Accomodation new_accomodation){
+    //add to all_flights
+    if(list == 0){
+      all_flights.add(new_flight);
+      System.out.println("Flight added sucessfuly!\n");
+    }
+    //add to all_hotels
+    else if(list == 1){
+      all_hotels.add(new_accomodation);
+      System.out.println("Accomodation added sucessfuly!\n");
+    }
+  }
+
+  /* List manipulation function remove*/
+  public void removeFromList(int list, int id){
+    //remove from all_flights
+    if(list == 0){
+      all_flights.remove(id);
+      System.out.println("Flight sucessfuly removed!\n");
+    }
+    else if(list == 1){
+      all_hotels.remove(id);
+      System.out.println("Accomodation sucessfuly removed!\n");
+    }
   }
 }
 
@@ -241,10 +320,6 @@ class Flight{
     this.departure = dep;
     this.quantity = qty;
     this.price = pri;
-  }
-
-  public int buyTicket() throws Exception{
-    return 0;
   }
 
   /* Shows flight information */
@@ -268,10 +343,6 @@ class Accomodation{
     this.price = pri;
   }
 
-  public int buyRoom() throws Exception{
-    return 0;
-  }
-
   /* Shows accomodation information */
   public void printInfo(){
     System.out.println("\tLocation: " + place);
@@ -286,8 +357,5 @@ class Packages{
   Accomodation accomodation;
   public Packages() throws Exception{
 
-  }
-  public int buyPackage() throws Exception{
-    return 0;
   }
 }
