@@ -7,10 +7,18 @@ import java.lang.Object;
 import java.rmi.registry.*;
 import java.rmi.server.UnicastRemoteObject;
 
+/*
+ - Tickets and rooms can be bought in quantity, but packages are just for one person.
+ -
+
+ - Gotta get checkin data and checkout data from client
+ -
+*/
 public class Client{
 
   static Registry NameServiceRef;
   static ClientImplement client;
+
 
   public static void main(String args[]) throws Exception{
     initialize();
@@ -36,7 +44,7 @@ public class Client{
         user_input = System.console().readLine();
         if( user_input.equals("0"))
           continue;
-        client.serverReference.searchHotels(client);
+        bookRoom();
       }
 
       /* Buy package */
@@ -45,10 +53,7 @@ public class Client{
         user_input = System.console().readLine();
         if( user_input.equals("0"))
           continue;
-        System.out.println("\t--FLIGHT TICKETS--");
-        client.serverReference.searchFlights(client);
-        System.out.println("\n\t--HOTEL OPENINGS--");
-        client.serverReference.searchHotels(client);
+        buyPackage();
       }
 
       /* Subscribe */
@@ -57,14 +62,13 @@ public class Client{
         user_input = System.console().readLine();
         if( user_input.equals("0"))
           continue;
+        subscribe(user_input);
       }
 
       /* Unsubscribe */
       else if(user_input.equals("5")){
         showOptions(5);
-        user_input = System.console().readLine();
-        if( user_input.equals("0"))
-          continue;
+        unsubscribe();
       }
     }
   }
@@ -80,13 +84,13 @@ public class Client{
 
   /* Show optins for client */
   static void showOptions(int option) throws Exception{
-    String cover = "What do you want to do? Press the number matching your choice.\n";
+    String cover = "\nWhat do you want to do? Press the number matching your choice.\n";
     String options = "  1 - Buy flight.\n  2 - Book hotel.\n  3 - Buy package.\n  4 - Subscribe for event.\n  5 - Unsubscribe.\n";
-    String options1 = "**BUY FLIGHT**\nType the flight ID to buy. Or press 0 to go back.\n";
-    String options2 = "**BOOK HOTEL**\nType the accomodation ID to buy. Or press 0 to go back.\n";
-    String options3 = "**BUY PACKAGE**\nType the flight ID and the accomodation ID you want buy. Or press 0 to go back.\n";
-    String options4 = "What are you interested in? Type 1 for new flights, 2 for new hotels or 3 for both.\n";
-    String options5 = "You have been unsubscribed.\n";
+    String options1 = "\n**BUY FLIGHT**\nEnter the flight ID to buy. Or press 0 to go back.\n";
+    String options2 = "\n**BOOK HOTEL**\nEnter the accomodation ID to buy. Or press 0 to go back.\n";
+    String options3 = "\n**BUY PACKAGE**\nEnter the flight ID and the accomodation ID you want buy. Or press 0 to go back.\n";
+    String options4 = "\n**SUBSCRIBE**\nWhat are you interested in?\nEnter 1 for new flights, 2 for new hotels or 3 for both. Enter 0 to go back\n";
+    String options5 = "\n**UNSUBSCRIBE**\n";
 
     if(option == 0){
       System.out.print(cover);
@@ -111,9 +115,12 @@ public class Client{
       System.out.println("error in function showOptions"); //test
   }
 
-  /* Buy flight ticket */
+  /* Buy flight ticket (calls server function) */
   static void buyTicket() throws Exception{
-    client.serverReference.searchFlights(client);
+    if(client.serverReference.searchFlights(client) == 0){
+      System.out.println("No tickets found!");
+      return;
+    }
     String id_t = System.console().readLine();
     int id_ticket = Integer.parseInt(id_t);
     System.out.println("How many tickets?");
@@ -122,9 +129,12 @@ public class Client{
     client.serverReference.buyTicket(client, id_ticket, qty);
   }
 
-  /* Buy flight ticket */
+  /* Book hotel room (calls server function) */
   static void bookRoom() throws Exception{
-    client.serverReference.searchHotels(client);
+    if(client.serverReference.searchHotels(client) == 0){
+      System.out.println("No hotels found!");
+      return;
+    }
     String id_h = System.console().readLine();
     int id_hotel = Integer.parseInt(id_h);
     System.out.println("How many rooms?");
@@ -133,6 +143,72 @@ public class Client{
     client.serverReference.bookRoom(client, id_hotel, qty);
   }
 
+  /* Buy package (calls server function) */
+  static void buyPackage() throws Exception{
+    System.out.println("\t--FLIGHT TICKETS--");
+    int tn = client.serverReference.searchFlights(client);
+    System.out.println("\n\t--HOTEL OPENINGS--");
+    int hn = client.serverReference.searchHotels(client);
+
+    if(tn == 0 || hn == 0){
+      System.out.println("No packages found!");
+      return;
+    }
+
+    System.out.println("Enter the ID of flight ticket you wish to purchase.");
+    String id_t = System.console().readLine();
+    int id_ticket = Integer.parseInt(id_t);
+
+    System.out.println("Enter the ID of hotel you wish to book.");
+    String id_h = System.console().readLine();
+    int id_hotel = Integer.parseInt(id_h);
+
+    client.serverReference.buyPackage(client, id_ticket, id_hotel);
+  }
+
+  /* Subscribe to event (calls server function) */
+  static void subscribe(String t) throws Exception{
+    if(!t.equals("1") && !t.equals("2") && !t.equals("3")){
+      System.out.println("Invalid value.");
+      return;
+    }
+    String type;
+    switch(t){
+      case "1":
+        type = "NEW FLIGHTS";
+        break;
+      case "2":
+        type = "NEW HOTELS";
+        break;
+      case "3":
+        type = "NEW PACKAGES";
+        break;
+      default:
+        type = "";
+    }
+    System.out.println("What is the destination of interest?");
+    String destination = System.console().readLine();
+    System.out.println("What is the maximum price?");
+    String p = System.console().readLine();
+    float price = Float.parseFloat(p);
+
+    client.serverReference.subscribe(client, type, destination, price);
+  }
+
+  /* Unubscribe to event (calls server function) */
+  static void unsubscribe() throws Exception{
+    if(client.serverReference.showSubscriptions(client) == 0){
+      System.out.println("You are not subscribed!\n");
+      return;
+    }
+
+    System.out.println("Enter de ID of the subcription you want to unsubscribe. Or enter 0 to go back.");
+    String user_input = System.console().readLine();
+    if(user_input.equals("0"))
+      return;
+
+    client.serverReference.unsubscribe(client, user_input);
+  }
 }
 
 interface ClientInterface extends Remote{
@@ -143,9 +219,12 @@ interface ClientInterface extends Remote{
 interface ServerInterface extends Remote{
   void buyTicket(ClientInterface client, int ticket, int qty) throws Exception;
   void bookRoom(ClientInterface client, int room, int qty) throws Exception;
-  //void buyPackage() throws RemoteException;
-  void searchFlights(ClientInterface client) throws Exception;
-  void searchHotels(ClientInterface client) throws Exception;
+  void buyPackage(ClientInterface client, int ticket, int room) throws Exception;
+  int searchFlights(ClientInterface client) throws Exception;
+  int searchHotels(ClientInterface client) throws Exception;
+  void subscribe(ClientInterface client, String type, String destination, float price) throws Exception;
+  void unsubscribe(ClientInterface client, String id) throws Exception;
+  int showSubscriptions(ClientInterface client) throws Exception;
 }
 
 class ClientImplement extends UnicastRemoteObject implements ClientInterface{
@@ -159,7 +238,7 @@ class ClientImplement extends UnicastRemoteObject implements ClientInterface{
   }
 
   /* Called by user when subscribed event happens */
-  public void Notify() throws Exception{
+  public void notify() throws Exception{
     System.out.println("Event happened!"); //test
   }
 
