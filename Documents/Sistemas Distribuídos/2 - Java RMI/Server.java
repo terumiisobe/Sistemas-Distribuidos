@@ -12,6 +12,9 @@ public class Server{
   static ServerImplement server;
   static Registry NameServiceRef;
 
+  static int flight_id_control;
+  static int hotel_id_control;
+
   public static void main(String args[]) throws Exception{
     initialize();
 
@@ -74,8 +77,8 @@ public class Server{
     NameServiceRef = LocateRegistry.createRegistry(port);
     server = new ServerImplement();
     Naming.rebind("Server", server);
-
-    System.out.println("Server set up."); //test
+    flight_id_control = 1;
+    hotel_id_control = 1;
   }
 
   /* Show optins for travel agency */
@@ -112,14 +115,12 @@ public class Server{
     System.out.println("\t--*--");
     if(list == 0){
       for(int i = 0; i < server.all_flights.size(); i++){
-        System.out.println("\tID:" + i);
         server.all_flights.get(i).printInfo();
         System.out.println("\t--*--\n");
       }
     }
     else if(list == 1){
       for(int i = 0; i < server.all_hotels.size(); i++){
-        System.out.println("\tID: " + i);
         server.all_hotels.get(i).printInfo();
         System.out.println("\t--*--\n");
       }
@@ -129,28 +130,29 @@ public class Server{
   /* Register new flight */
   static void registerFlight() throws Exception{
     // get origin place
-    System.out.println("Enter origin:\n");
+    System.out.println("Enter origin:");
     String origin = System.console().readLine();
     // get destination place
-    System.out.println("Enter destination:\n");
+    System.out.println("Enter destination:");
     String destination = System.console().readLine();
     // get departure date
-    System.out.println("Enter departure date like dd/mm/yyyy:\n");
+    System.out.println("Enter departure date like dd/mm/yyyy:");
     String departure = System.console().readLine();
     // get return date
-    System.out.println("In case the ticket is ROUND-TRIP, enter return date like dd/mm/yyyy:\n(if ONE-WAY enter 0)\n");
+    System.out.println("In case the ticket is ROUND-TRIP, enter return date like dd/mm/yyyy:\n(if ONE-WAY enter 0)");
     String returnDate = System.console().readLine();
     // get number of tickets available
-    System.out.println("Enter number of tickets:\n");
+    System.out.println("Enter number of tickets:");
     String qty = System.console().readLine();
     int quantity = Integer.parseInt(qty);
     // get price of each ticket
-    System.out.println("Enter price:\n");
+    System.out.println("Enter price:");
     String p = System.console().readLine();
     float price = Float.parseFloat(p);
 
-    Flight new_flight = new Flight(origin, destination, departure, returnDate, quantity, price);
+    Flight new_flight = new Flight(flight_id_control, origin, destination, departure, returnDate, quantity, price);
     server.addToList(0, new_flight, null);
+    flight_id_control++;
 
     checkNotifications(0, new_flight, null);
   }
@@ -158,19 +160,20 @@ public class Server{
   /* Register new accomodation */
   static void registerAccomodation() throws Exception{
     // get hotel location
-    System.out.println("Enter location:\n");
+    System.out.println("Enter location:");
     String place = System.console().readLine();
     // get number of rooms available
-    System.out.println("Enter number of rooms:\n");
+    System.out.println("Enter number of rooms:");
     String r = System.console().readLine();
     int rooms = Integer.parseInt(r);
     // get price of room per day
-    System.out.println("Enter price:\n");
+    System.out.println("Enter price:");
     String p = System.console().readLine();
     float price = Float.parseFloat(p);
 
-    Accomodation new_accomodation = new Accomodation(place, rooms, price);
+    Accomodation new_accomodation = new Accomodation(hotel_id_control, place, rooms, price);
     server.addToList(1, null, new_accomodation);
+    hotel_id_control++;
 
     checkNotifications(1, null, new_accomodation);
   }
@@ -197,22 +200,17 @@ public class Server{
 
   /* Check for notifications */
   static void checkNotifications(int type, Flight new_flight, Accomodation new_hotel) throws Exception{
-    List<Event> notifyFlight = new ArrayList<Event>();
-    List<Event> notifyHotel = new ArrayList<Event>();
 
     for(int i = 0; i < server.all_events.size(); i++){
       //a new flight adding can trigger NEW TICKETS or NEW PACKAGES notifications
       if(type == 0){
-        if(server.all_events.get(i).type.equals("NEW TICKETS") && server.all_events.get(i).destination.equals(new_flight.destination) && server.all_events.get(i).max_price >= new_flight.price){
-          System.out.println("found a match for ticket."); //test
-          //notifyFlight
-          server.all_events.get(i).client_id.notify();
+        if(server.all_events.get(i).type.equals("NEW FLIGHTS") && server.all_events.get(i).destination.equals(new_flight.destination) && server.all_events.get(i).max_price >= new_flight.price){
+          server.all_events.get(i).client_id.notifyEvent("NEW FLIGHT", new_flight.destination, new_flight.price);
         }
         if(server.all_events.get(i).type.equals("NEW PACKAGES") && server.all_events.get(i).destination.equals(new_flight.destination)){
           for(int j = 0; j < server.all_hotels.size(); j++){
             if(server.all_hotels.get(j).place.equals(new_flight.destination) && server.all_events.get(i).max_price >= new_flight.price+server.all_hotels.get(j).price){
-              //notify package
-              server.all_events.get(i).client_id.notify();
+              server.all_events.get(i).client_id.notifyEvent("NEW PACKAGE", new_flight.destination, new_flight.price+server.all_hotels.get(j).price);
             }
           }
         }
@@ -220,20 +218,16 @@ public class Server{
       //a new hotel adding can trigger NEW HOTELS or NEW PACKAGES notifications
       else if(type == 1){
         if(server.all_events.get(i).type.equals("NEW HOTELS") && server.all_events.get(i).destination.equals(new_hotel.place) && server.all_events.get(i).max_price >= new_hotel.price){
-          System.out.println("found a match for hotel."); //test
-          //notifyHotel
-          server.all_events.get(i).client_id.notify();
+          server.all_events.get(i).client_id.notifyEvent("NEW HOTEL", new_hotel.place, new_hotel.price);
         }
         if(server.all_events.get(i).type.equals("NEW PACKAGES") && server.all_events.get(i).destination.equals(new_hotel.place)){
-          for(j = 0; j < server.all_flights.size(); j++){
+          for(int j = 0; j < server.all_flights.size(); j++){
             if(server.all_flights.get(j).destination.equals(new_hotel.place) && server.all_events.get(i).max_price >= new_hotel.price+server.all_flights.get(j).price){
-              server.all_events.get(i).client_id.notify();
-              //notify package
+              server.all_events.get(i).client_id.notifyEvent("NEW PACKAGE", new_hotel.place, new_hotel.price+server.all_flights.get(j).price);
             }
           }
         }
       }
-
     }
   }
 }
@@ -250,7 +244,7 @@ interface ServerInterface extends Remote{
 }
 
 interface ClientInterface extends Remote{
-  void Notify() throws Exception;
+  void notifyEvent(String type, String destination, float price) throws Exception;
   void echo(String message) throws Exception;
 }
 
@@ -271,9 +265,9 @@ class ServerImplement extends UnicastRemoteObject implements ServerInterface{
   /* Search function called by user */
   public int searchFlights(ClientInterface client) throws Exception{
     for(int i = 0;i < all_flights.size(); i++){
-      client.echo("\t--*--\n");
+      client.echo("\t--*--");
       client.echo("\t" + all_flights.get(i).type);
-      client.echo("\tID: " + i);
+      client.echo("\tID: " + all_flights.get(i).id);
       client.echo("\tOrigin: " + all_flights.get(i).origin);
       client.echo("\tDestination: " + all_flights.get(i).destination);
       client.echo("\tDeparture date: " + all_flights.get(i).departure);
@@ -289,8 +283,8 @@ class ServerImplement extends UnicastRemoteObject implements ServerInterface{
   /* Search function called by user */
   public int searchHotels(ClientInterface client) throws Exception{
     for(int i = 0;i < all_hotels.size(); i++){
-      client.echo("\t--*--\n");
-      client.echo("\tID: " + i);
+      client.echo("\t--*--");
+      client.echo("\tID: " + all_hotels.get(i).id);
       client.echo("\tLocation: " + all_hotels.get(i).place);
       client.echo("\tPrice: " + all_hotels.get(i).price);
     }
@@ -303,43 +297,63 @@ class ServerImplement extends UnicastRemoteObject implements ServerInterface{
 
   /* Buy flight ticket */
   public synchronized void buyTicket(ClientInterface client, int ticket, int qty) throws Exception{
-    if(ticket >= all_flights.size()){
-      client.echo("Ticket not available.");
+    // index keeps selected ticket position
+    int index = 12345;
+    for(int i = 0; i < all_flights.size(); i++){
+      if(all_flights.get(i).id == ticket){
+        index = i;
+        break;
+      }
+    }
+    // no ticket was found
+    if(index == 12345){
+      client.echo("Ticket unavailable.");
       return;
     }
-    int av = all_flights.get(ticket).quantity;
+
+    int av = all_flights.get(index).quantity;
     if(qty == 0)
       client.echo("No ticket was bought.");
     else if(qty > av)
       client.echo("That quantity is not available!");
     else{
-      all_flights.get(ticket).quantity = av - qty;
-      if(all_flights.get(ticket).quantity == 0)
-        removeFromList(0, ticket);
+      all_flights.get(index).quantity = av - qty;
+      if(all_flights.get(index).quantity == 0)
+        removeFromList(0, index);
 
       System.out.println("Flight ticket bought.");
-      client.echo("Flight ticket purchased sucessfully!");
+      client.echo("Flight ticket purchased successfully!");
     }
   }
 
   /* Book hotel room */
   public synchronized void bookRoom(ClientInterface client, int room, int qty) throws Exception{
-    if(room >= all_hotels.size()){
-      client.echo("Hotel not available.");
+    // index keeps selected hotel position
+    int index = 12345;
+    for(int i = 0; i < all_hotels.size(); i++){
+      if(all_hotels.get(i).id == room){
+        index = i;
+        break;
+      }
+    }
+    // no hotel was found
+    if(index == 12345){
+      client.echo("Hotel unavailable.");
       return;
     }
-    int av = all_hotels.get(room).rooms;
+
+    int av = all_hotels.get(index).rooms;
     if(qty == 0)
       client.echo("No room was booked.");
     else if(qty > av)
       client.echo("That quantity is not available!");
     else{
-      all_hotels.get(room).rooms = av - qty;
-      if(all_hotels.get(room).rooms == 0)
-        removeFromList(1, room);
+      all_hotels.get(index).rooms = av - qty;
+      if(all_hotels.get(index).rooms == 0)
+        removeFromList(1, index);
 
       System.out.println("Room booked.");
-      client.echo("Hotel room booked sucessfully!");
+      client.echo("Hotel room booked successfully!");
     }
   }
 
@@ -358,7 +372,7 @@ class ServerImplement extends UnicastRemoteObject implements ServerInterface{
       removeFromList(1, room);
 
     System.out.println("Package bought.");
-    client.echo("Package purchased sucessfully!");
+    client.echo("Package purchased successfully!");
   }
 
   /* Subscribe to mailing list (called by user) */
@@ -412,12 +426,12 @@ class ServerImplement extends UnicastRemoteObject implements ServerInterface{
     //add to all_flights
     if(list == 0){
       all_flights.add(new_flight);
-      System.out.println("Flight added sucessfuly!\n");
+      System.out.println("Flight added successfully!");
     }
     //add to all_hotels
     else if(list == 1){
       all_hotels.add(new_accomodation);
-      System.out.println("Accomodation added sucessfuly!\n");
+      System.out.println("Accomodation added successfully!");
     }
   }
 
@@ -463,7 +477,10 @@ class Flight{
   int quantity;
   float price;
 
-  public Flight(String ori, String des, String dep, String ret, int qty, float pri) throws Exception{
+  int id;
+
+  public Flight(int id, String ori, String des, String dep, String ret, int qty, float pri) throws Exception{
+    this.id = id;
     this.origin = ori;
     this.destination = des;
     this.departure = dep;
@@ -482,6 +499,7 @@ class Flight{
   /* Shows flight information */
   public void printInfo(){
     System.out.println("\t" + type);
+    System.out.println("\tID: " + id);
     System.out.println("\tOrigin: " + origin);
     System.out.println("\tDestination: " + destination);
     System.out.println("\tDeparture date: " + departure);
@@ -497,7 +515,10 @@ class Accomodation{
   int rooms; // number of rooms
   float price;
 
-  public Accomodation(String pla, int r, float pri) throws Exception{
+  int id;
+
+  public Accomodation(int id, String pla, int r, float pri) throws Exception{
+    this.id = id;
     this.place = pla;
     this.rooms = r;
     this.price = pri;
@@ -505,6 +526,7 @@ class Accomodation{
 
   /* Shows accomodation information */
   public void printInfo(){
+    System.out.println("\tID: " + id);
     System.out.println("\tLocation: " + place);
     System.out.println("\tPrice: " + price);
     System.out.println("\tNumber of rooms: " + rooms);
@@ -523,6 +545,6 @@ class Event{
     this.destination = dest;
     this.max_price = max;
 
-    System.out.println("Event registered."); //test
+    System.out.println("Event registered.");
   }
 }

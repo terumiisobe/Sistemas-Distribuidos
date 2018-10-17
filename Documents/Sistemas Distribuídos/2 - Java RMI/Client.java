@@ -9,9 +9,7 @@ import java.rmi.server.UnicastRemoteObject;
 
 /*
  - Tickets and rooms can be bought in quantity, but packages are just for one person.
- -
-
- - Gotta get checkin data and checkout data from client
+ - You don't get unsubscribed automatically when event happens.
  -
 */
 public class Client{
@@ -79,7 +77,6 @@ public class Client{
     NameServiceRef = LocateRegistry.getRegistry(port);
     client = new ClientImplement(NameServiceRef);
 
-    System.out.println("Client set up."); //test
   }
 
   /* Show optins for client */
@@ -122,6 +119,8 @@ public class Client{
       return;
     }
     String id_t = System.console().readLine();
+    if(id_t.equals("0"))
+      return;
     int id_ticket = Integer.parseInt(id_t);
     System.out.println("How many tickets?");
     String q = System.console().readLine();
@@ -136,18 +135,31 @@ public class Client{
       return;
     }
     String id_h = System.console().readLine();
+    if(id_h.equals("0"))
+      return;
     int id_hotel = Integer.parseInt(id_h);
+
     System.out.println("How many rooms?");
     String q = System.console().readLine();
     int qty = Integer.parseInt(q);
+
+    System.out.println("How many people?");
+    String ppl = System.console().readLine();
+
+    System.out.println("When is the checkin date?");
+    String cin = System.console().readLine();
+
+    System.out.println("When is the checkout date?");
+    String cout = System.console().readLine();
+
     client.serverReference.bookRoom(client, id_hotel, qty);
   }
 
   /* Buy package (calls server function) */
   static void buyPackage() throws Exception{
-    System.out.println("\t--FLIGHT TICKETS--");
+    System.out.println("\t--FLIGHT TICKETS--\n");
     int tn = client.serverReference.searchFlights(client);
-    System.out.println("\n\t--HOTEL OPENINGS--");
+    System.out.println("\n\t--HOTEL OPENINGS--\n");
     int hn = client.serverReference.searchHotels(client);
 
     if(tn == 0 || hn == 0){
@@ -157,6 +169,8 @@ public class Client{
 
     System.out.println("Enter the ID of flight ticket you wish to purchase.");
     String id_t = System.console().readLine();
+    if(id_t.equals("0"))
+      return;
     int id_ticket = Integer.parseInt(id_t);
 
     System.out.println("Enter the ID of hotel you wish to book.");
@@ -212,8 +226,8 @@ public class Client{
 }
 
 interface ClientInterface extends Remote{
-  void Notify() throws Exception;
   void echo(String message) throws Exception;
+  void notifyEvent(String type, String destination, float price) throws Exception;
 }
 
 interface ServerInterface extends Remote{
@@ -237,12 +251,15 @@ class ClientImplement extends UnicastRemoteObject implements ClientInterface{
     this.serverReference = (ServerInterface)reference.lookup("Server");
   }
 
-  /* Called by user when subscribed event happens */
-  public void notify() throws Exception{
-    System.out.println("Event happened!"); //test
-  }
-
+  /* Called by server to print message */
   public void echo(String message) throws Exception{
     System.out.println(message);
+  }
+
+  /* Called by server when subscribed event happens */
+  public void notifyEvent(String type, String destination, float price) throws Exception{
+    System.out.println("\nLucky! We found a " + type + " matching one of your subscriptions!");
+    System.out.println("|Destination: " + destination + "\n|Price: " + price);
+    System.out.println("Use menu to purchase this offer. If you do not want to receive more notifications for this event unsubscribe using the menu.");
   }
 }
