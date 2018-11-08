@@ -1,13 +1,44 @@
 # Server in python
 import json
+import thread
 from flask import Flask, request
 from Classes import Flights
 
 flight = Flights()
 
-def main():
+app = Flask(__name__)
+
+@app.route('/searchFlights', methods=['GET','POST'])
+def searchFlights():
+
+    print("Called function /serchFlights")
+
+    # no flight tickets available
+    if(len(flight.all_flights) == 0):
+        data = {'Status':'There are no tickets available :('}
+        return json.dumps(data)
+    data = {}
+    for f in flight.all_flights:
+        data[f['id']]=f
+    return json.dumps(data)
+
+@app.route('/buyTicket/<int:ticket_id>/<int:number>',methods=['GET','POST'])
+def buyTicket(ticket_id, number):
+    status = flight.buy(ticket_id, number)
+    if status == 1:
+        data = {'Status':'**Ticket(s) bought sucessfully!'}
+        print(str(number) + " flight ticket(s) bought from id " + str(ticket_id))
+    elif status == 0:
+        data = {'Status':'**There are not enought tickets available :('}
+    else:
+        data = {'Status':'**This ticket does not exists :('}
+    return json.dumps(data)
+
+
+
+# thread with menu options for travel agency
+def system():
     while True:
-        app.run()
         user_input = raw_input(showOptions(0))
         # add new flight
         if user_input == "1":
@@ -45,7 +76,7 @@ def main():
         #if user_input == "6":
             #hotel.showAllHotels()
 
-# show options for travel agency
+# prints options for travel agency
 def showOptions(option):
     cover = "\nWhat do you want to do? Press the number matching your choice.\n"
     options = "  1 - Add flight\n  2 - Add accomodation.\n  3 - Remove plane ticket.\n  4 - Remove accomodation.\n  5 - Show all flights.\n  6 - Show all hotels.\n"
@@ -63,16 +94,17 @@ def showOptions(option):
         print(options2)
     elif option == 3:
         print(options3)
-    else:
+    elif option == 4:
         print(options4)
+    else:
+        print("else error")
 
-app = Flask(__name__)
 
 if __name__ == "__main__":
-    main()
-    
-@app.route('/searchFlights', methods=('POST','GET'))
-def searchFlights():
-    print("func serchFlights")
-    data={"hey":"yo"}
-    return json.dumps(data)
+    try:
+        thread.start_new_thread( system, () )
+        app.run()
+    except:
+        print "Error: unable to start thread"
+    while 1:
+        pass

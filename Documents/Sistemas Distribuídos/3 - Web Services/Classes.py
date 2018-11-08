@@ -28,4 +28,21 @@ class Flights:
             if flight['id'] == id:
                 self.all_flights.remove[flight]
 
-    #def buyTicket(self, id):
+    def buy(self, id, number):
+        for flight in self.all_flights:
+            if flight['id'] == id:
+                exists = True
+                print flight['id']
+                print flight['quantity']
+                q = int(flight['quantity'])
+                # not enought tickets
+                if q < number:
+                    return 0
+                q-=number
+                flight['quantity'] = q
+                if flight['quantity'] == 0:
+                    this.removeFlight(id)
+                return 1
+        # ticket doesn't exists
+        if exists == False:
+            return 2
