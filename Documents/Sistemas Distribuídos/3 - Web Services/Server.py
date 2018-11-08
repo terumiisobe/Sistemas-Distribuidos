@@ -1,11 +1,13 @@
 # Server in python
-import requests
 import json
+from flask import Flask, request
 from Classes import Flights
 
+flight = Flights()
+
 def main():
-    flight = Flights()
     while True:
+        app.run()
         user_input = raw_input(showOptions(0))
         # add new flight
         if user_input == "1":
@@ -64,5 +66,13 @@ def showOptions(option):
     else:
         print(options4)
 
+app = Flask(__name__)
+
 if __name__ == "__main__":
     main()
+    
+@app.route('/searchFlights', methods=('POST','GET'))
+def searchFlights():
+    print("func serchFlights")
+    data={"hey":"yo"}
+    return json.dumps(data)
