@@ -2,12 +2,14 @@
 import json
 import thread
 from flask import Flask, request
-from Classes import Flights
+from Classes import Flights, Hotels
 
 flight = Flights()
+hotel = Hotels()
 
 app = Flask(__name__)
 
+# Function thats provides information about flight tickets.
 @app.route('/searchFlights', methods=['GET','POST'])
 def searchFlights():
 
@@ -19,9 +21,25 @@ def searchFlights():
         return json.dumps(data)
     data = {}
     for f in flight.all_flights:
-        data[f['id']]=f
+        data[f['id']] = f
     return json.dumps(data)
 
+# Function thats provides information about hotel openings.
+@app.route('/searchHotels', methods=['GET','POST'])
+def searchHotels():
+
+    print("Called function /serchHotels")
+
+    # no hotel openings available
+    if(len(hotel.all_hotels) == 0):
+        data = {'Status':'There are no rooms available :('}
+        return json.dumps(data)
+    data = {}
+    for h in hotel.all_hotels:
+        data[h['id']] = h
+    return json.dumps(data)
+
+# Function simulating the ticket buy
 @app.route('/buyTicket/<int:ticket_id>/<int:number>',methods=['GET','POST'])
 def buyTicket(ticket_id, number):
     status = flight.buy(ticket_id, number)
@@ -34,9 +52,20 @@ def buyTicket(ticket_id, number):
         data = {'Status':'**This ticket does not exists :('}
     return json.dumps(data)
 
+# Function simulating the room book
+@app.route('/bookRoom/<int:room_id>/<int:number>',methods=['GET','POST'])
+def bookRoom(room_id, number):
+    status = hotel.buy(room_id, number)
+    if status == 1:
+        data = {'Status':'**Room(s) booked sucessfully!'}
+        print(str(number) + " room(s) booked from id " + str(room_id))
+    elif status == 0:
+        data = {'Status':'**There are not enought rooms available :('}
+    else:
+        data = {'Status':'**This rooms does not exists :('}
+    return json.dumps(data)
 
-
-# thread with menu options for travel agency
+# Main thread with menu options for travel agency
 def system():
     while True:
         user_input = raw_input(showOptions(0))
@@ -47,15 +76,16 @@ def system():
                 continue
             flight.registerFlight()
 
-        # add new accomodation
+        # add new hotel
         if user_input == "2":
             user_input = raw_input(showOptions(2))
             if user_input == "0":
                 continue
-            # registerAccomodation()
+            hotel.registerHotel()
 
         # remove flight
         if user_input == "3":
+            flight.showAllFlights()
             user_input = raw_input(showOptions(3))
             if user_input == "0":
                 continue
@@ -63,20 +93,21 @@ def system():
 
         # remove hotel
         if user_input == "4":
+            hotel.showAllHotels()
             user_input = raw_input(showOptions(4))
             if user_input == "0":
                 continue
-            # removeAccomodation()
+            hotel.removeHotel(user_input)
 
         # show all flights
         if user_input == "5":
             flight.showAllFlights()
 
-        # show all accomodation
-        #if user_input == "6":
-            #hotel.showAllHotels()
+        # show all hotel
+        if user_input == "6":
+            hotel.showAllHotels()
 
-# prints options for travel agency
+# Prints options for travel agency
 def showOptions(option):
     cover = "\nWhat do you want to do? Press the number matching your choice.\n"
     options = "  1 - Add flight\n  2 - Add accomodation.\n  3 - Remove plane ticket.\n  4 - Remove accomodation.\n  5 - Show all flights.\n  6 - Show all hotels.\n"

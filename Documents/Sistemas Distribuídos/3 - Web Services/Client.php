@@ -19,7 +19,7 @@ function main(){
         $user_input = readline(showOptions(2));
         if( $user_input == "0")
           continue;
-        // bookRoom();
+        bookRoom();
       }
 
       /* Buy package */
@@ -32,6 +32,7 @@ function main(){
   }
 }
 
+/* function that shows options for client */
 function showOptions($option){
     $cover = "\nWhat do you want to do? Press the number matching your choice.\n";
     $options = "  1 - Buy flight.\n  2 - Book hotel.\n  3 - Buy package.\n";
@@ -56,7 +57,7 @@ function showOptions($option){
       echo ("error in function showOptions"); //test
 }
 
-// Buy flight ticket (request information from server)
+/* Buy flight ticket (request information from server) */
 function buyTicket(){
   $unparsed_json = file_get_contents('http://127.0.0.1:5000/searchFlights');
   $json = json_decode($unparsed_json);
@@ -85,7 +86,41 @@ function buyTicket(){
   foreach ($json as $key => $value) {echo "$value\n";}
 }
 
-// client interface start
+/* Book room (request information from server) */
+function bookRoom(){
+  $unparsed_json = file_get_contents('http://127.0.0.1:5000/searchHotels');
+  $json = json_decode($unparsed_json);
+  // prints options on the screen
+  foreach ($json as $key => $value){
+    echo "\t\t--*--\n";
+    // there are no rooms available
+    if($key == 'Status'){
+      echo "$value\n";
+      return;
+    }
+    else{
+      foreach ($value as $k => $v){
+        if($k != 'quantity')
+          echo "\t\t$k: $v\n";
+      };
+      echo "\t\t--*--\n\n";
+    }
+  };
+  $id = readline("\nType the room id you want to acquire: ");
+  $number = readline("\nNumber of rooms: ");
+
+  $request = 'http://127.0.0.1:5000/bookRoom/'.$id.'/'.$number;
+  $unparsed_json = file_get_contents($request);
+  $json = json_decode($unparsed_json);
+  foreach ($json as $key => $value) {echo "$value\n";}
+}
+
+/*Buy package (request information from server) */
+function buyPackage(){
+
+}
+
+/* client interface start */
 main();
 
 ?>
