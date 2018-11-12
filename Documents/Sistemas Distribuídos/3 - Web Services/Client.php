@@ -27,7 +27,7 @@ function main(){
         $user_input = readline(showOptions(3));
         if( $user_input == "0")
           continue;
-        // buyPackage();
+        buyPackage();
       }
   }
 }
@@ -61,7 +61,9 @@ function showOptions($option){
 function buyTicket(){
   $unparsed_json = file_get_contents('http://127.0.0.1:5000/searchFlights');
   $json = json_decode($unparsed_json);
+
   // prints options on the screen
+  echo "\t\t--FLIGHT TICKETS--\n";
   foreach ($json as $key => $value){
     echo "\t\t--*--\n";
     // there are no tickets available
@@ -90,7 +92,9 @@ function buyTicket(){
 function bookRoom(){
   $unparsed_json = file_get_contents('http://127.0.0.1:5000/searchHotels');
   $json = json_decode($unparsed_json);
+
   // prints options on the screen
+  echo "\t\t--HOTEL OPENINGS--\n";
   foreach ($json as $key => $value){
     echo "\t\t--*--\n";
     // there are no rooms available
@@ -117,7 +121,66 @@ function bookRoom(){
 
 /*Buy package (request information from server) */
 function buyPackage(){
+  $unparsed_tickets = file_get_contents('http://127.0.0.1:5000/searchFlights');
+  $unparsed_hotels = file_get_contents('http://127.0.0.1:5000/searchHotels');
+  $json_tickets = json_decode($unparsed_tickets);
+  $json_hotels = json_decode($unparsed_hotels);
 
+  echo "\t\t--FLIGHT TICKETS--\n";
+  foreach ($json_tickets as $key => $value){
+    echo "\t\t--*--\n";
+    // there are no rooms available
+    if($key == 'Status'){
+      echo "$value\n";
+      return;
+    }
+    else{
+      foreach ($value as $k => $v){
+        if($k != 'quantity')
+          echo "\t\t$k: $v\n";
+      };
+      echo "\t\t--*--\n\n";
+    }
+  };
+  echo "\t\t--HOTEL OPENINGS--\n";
+  foreach ($json_hotels as $key => $value){
+    echo "\t\t--*--\n";
+    // there are no rooms available
+    if($key == 'Status'){
+      echo "$value\n";
+      return;
+    }
+    else{
+      foreach ($value as $k => $v){
+        if($k != 'quantity')
+          echo "\t\t$k: $v\n";
+      };
+      echo "\t\t--*--\n\n";
+    }
+  };
+  $ticket = readline("Enter the ID of flight ticket you wish to purchase: ");
+  $hotel = readline("Enter the ID of hotel you wish to book: ");
+
+  $request = 'http://127.0.0.1:5000/buyPackage'.'/'.$ticket.'/'.$hotel;
+  $unparsed_json = file_get_contents($request);
+  $json = json_decode($unparsed_json);
+
+  // prints options on the screen
+  foreach ($json as $key => $value){
+    echo "\t\t--*--\n";
+    // there are no rooms available
+    if($key == 'Status'){
+      echo "$value\n";
+      return;
+    }
+    else{
+      foreach ($value as $k => $v){
+        if($k != 'quantity')
+          echo "\t\t$k: $v\n";
+      };
+      echo "\t\t--*--\n\n";
+    }
+  };
 }
 
 /* client interface start */

@@ -3,12 +3,11 @@ class Flights:
     all_flights = []
 
     def __init__(self):
-        print("new flight instance")
         self.flight_id_control = 1
 
     def showAllFlights(self):
         if len(self.all_flights) == 0:
-            print("There are no flights today!\n")
+            print("**There are no flights today!\n")
             return
         for flight in self.all_flights:
             print("\t\t--**--")
@@ -28,24 +27,24 @@ class Flights:
 
     def removeFlight(self, id):
         for flight in self.all_flights:
-            if str(flight.get('id')) == id:
+            if flight.get('id') == id:
                 self.all_flights.remove(flight)
-                print("Flight with id " + id + " removed!\n")
+                print("**Flight with id " + str(id) + " removed!\n")
 
     def buy(self, id, number):
+        exists = False
         for flight in self.all_flights:
             if flight['id'] == id:
                 exists = True
-                print flight['id']
-                print flight['quantity']
                 q = int(flight['quantity'])
                 # not enought tickets
                 if q < number:
                     return 0
                 q-=number
                 flight['quantity'] = q
-                if flight['quantity'] == 0:
-                    this.removeFlight(id)
+                if int(flight['quantity']) == 0:
+                    print('remove')
+                    self.removeFlight(id)
                 return 1
         # ticket doesn't exists
         if exists == False:
@@ -55,12 +54,11 @@ class Hotels:
     all_hotels = []
 
     def __init__(self):
-        print("new hotel instance")
         self.hotel_id_control = 1
 
     def showAllHotels(self):
         if len(self.all_hotels) == 0:
-            print("There are no hotels today!\n")
+            print("**There are no hotels today!\n")
             return
         for hotel in self.all_hotels:
             print("\t\t--**--")
@@ -77,24 +75,23 @@ class Hotels:
 
     def removeHotel(self, id):
         for hotel in self.all_hotels:
-            if str(hotel['id']) == id:
+            if hotel.get('id') == id:
                 self.all_hotels.remove(hotel)
-                print("Hotel with id " + id + " removed!\n")
+                print("**Hotel with id " + str(id) + " removed!\n")
 
     def buy(self, id, number):
+        exists = False
         for hotel in self.all_hotels:
             if hotel['id'] == id:
                 exists = True
-                print hotel['id']
-                print hotel['number']
                 q = int(hotel['number'])
                 # not enought tickets
                 if q < number:
                     return 0
                 q-=number
                 hotel['number'] = str(q)
-                if hotel['number'] == 0:
-                    this.removeHotel(id)
+                if int(hotel['number']) == 0:
+                    self.removeHotel(id)
                 return 1
         # rooms doesn't exists
         if exists == False:

@@ -45,7 +45,7 @@ def buyTicket(ticket_id, number):
     status = flight.buy(ticket_id, number)
     if status == 1:
         data = {'Status':'**Ticket(s) bought sucessfully!'}
-        print(str(number) + " flight ticket(s) bought from id " + str(ticket_id))
+        print("**" + str(number) + " flight ticket(s) bought from id " + str(ticket_id))
     elif status == 0:
         data = {'Status':'**There are not enought tickets available :('}
     else:
@@ -58,11 +58,22 @@ def bookRoom(room_id, number):
     status = hotel.buy(room_id, number)
     if status == 1:
         data = {'Status':'**Room(s) booked sucessfully!'}
-        print(str(number) + " room(s) booked from id " + str(room_id))
+        print("**" + str(number) + " room(s) booked from id " + str(room_id))
     elif status == 0:
         data = {'Status':'**There are not enought rooms available :('}
     else:
         data = {'Status':'**This rooms does not exists :('}
+    return json.dumps(data)
+
+# Function simulating the package buy
+@app.route('/buyPackage/<int:ticket_id>/<int:room_id>',methods=['GET','POST'])
+def buyPackage(ticket_id, room_id):
+    status = buyPackage(ticket_id, room_id)
+    if status == 1:
+        data = {'Status':'**Package bought sucessfully!'}
+        print("**1 package bought with ticket " + str(ticket_id) + " and room " + str(room_id))
+    else:
+        data = {'Status':'**Package unavailable :('}
     return json.dumps(data)
 
 # Main thread with menu options for travel agency
@@ -89,7 +100,7 @@ def system():
             user_input = raw_input(showOptions(3))
             if user_input == "0":
                 continue
-            flight.removeFlight(user_input)
+            flight.removeFlight(int(user_input))
 
         # remove hotel
         if user_input == "4":
@@ -97,7 +108,7 @@ def system():
             user_input = raw_input(showOptions(4))
             if user_input == "0":
                 continue
-            hotel.removeHotel(user_input)
+            hotel.removeHotel(int(user_input))
 
         # show all flights
         if user_input == "5":
@@ -130,6 +141,28 @@ def showOptions(option):
     else:
         print("else error")
 
+# Check if ticket and hotel are available and buy
+def buyPackage(id_ticket, id_hotel):
+    t_exists = False
+    h_exists = False
+    for ticket in flight.all_flights:
+        print(str(type(ticket['id'])))
+        print(str(type(id_ticket)))
+        if ticket['id'] == id_ticket:
+            print('hey')
+            t_exists = True
+    for room in hotel.all_hotels:
+        if room['id'] == id_hotel:
+            print('hey')
+            h_exists = True
+    # Both ticket and room is available
+    if (t_exists and h_exists):
+        flight.buy(id_ticket, 1)
+        hotel.buy(id_hotel, 1)
+        return 1
+    # One of the items are not available
+    else:
+        return 0
 
 if __name__ == "__main__":
     try:
